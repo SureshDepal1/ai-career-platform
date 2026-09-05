@@ -2,8 +2,18 @@ from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Career, CareerSkill, UserSkill
-from .serializers import CareerSerializer, SkillGapSerializer
+from .models import (
+    Career,
+    CareerSkill,
+    UserSkill,
+    Roadmap,
+)
+
+from .serializers import (
+    CareerSerializer,
+    SkillGapSerializer,
+    RoadmapSerializer,
+)
 
 
 class CareerListView(generics.ListAPIView):
@@ -55,10 +65,23 @@ class SkillGapView(generics.GenericAPIView):
                 "status": status,
             })
 
-        serializer = self.get_serializer(results, many=True)
+        serializer = self.get_serializer(
+            results,
+            many=True
+        )
 
         return Response({
             "career": career.title,
             "skill_gaps": serializer.data
         })
-        
+
+
+class RoadmapView(generics.RetrieveAPIView):
+    serializer_class = RoadmapSerializer
+
+    def get_object(self):
+        career_id = self.kwargs['career_id']
+
+        return Roadmap.objects.filter(
+            career_id=career_id
+        ).first()

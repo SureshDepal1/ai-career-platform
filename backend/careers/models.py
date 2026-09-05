@@ -39,3 +39,34 @@ class UserSkill(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.skill.name}"
+
+
+class Roadmap(models.Model):
+    career = models.ForeignKey(
+        Career,
+        on_delete=models.CASCADE
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.title
+
+
+class LearningResource(models.Model):
+    roadmap = models.ForeignKey(
+        Roadmap,
+        on_delete=models.CASCADE,
+        related_name='resources'
+    )
+    skill = models.ForeignKey(
+        Skill,
+        on_delete=models.CASCADE
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    resource_type = models.CharField(max_length=50, blank=True)
+    url = models.URLField(blank=True)
+
+    def __str__(self):
+        return self.title

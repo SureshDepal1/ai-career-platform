@@ -1,5 +1,11 @@
 from rest_framework import serializers
-from .models import Career, Skill, CareerSkill
+from .models import (
+    Career,
+    Skill,
+    CareerSkill,
+    Roadmap,
+    LearningResource,
+)
 
 
 class SkillSerializer(serializers.ModelSerializer):
@@ -38,3 +44,32 @@ class SkillGapSerializer(serializers.Serializer):
     current_proficiency = serializers.IntegerField()
     gap = serializers.IntegerField()
     status = serializers.CharField()
+
+
+class LearningResourceSerializer(serializers.ModelSerializer):
+    skill = SkillSerializer(read_only=True)
+
+    class Meta:
+        model = LearningResource
+        fields = [
+            'id',
+            'skill',
+            'title',
+            'description',
+            'resource_type',
+            'url',
+        ]
+
+
+class RoadmapSerializer(serializers.ModelSerializer):
+    resources = LearningResourceSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Roadmap
+        fields = [
+            'id',
+            'career',
+            'title',
+            'description',
+            'resources',
+        ]
