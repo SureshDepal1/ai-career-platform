@@ -30,3 +30,11 @@ class CareerSerializer(serializers.ModelSerializer):
             career_skills,
             many=True
         ).data
+
+
+class SkillGapSerializer(serializers.Serializer):
+    skill = SkillSerializer()
+    required_importance = serializers.IntegerField()
+    current_proficiency = serializers.IntegerField()
+    gap = serializers.IntegerField()
+    status = serializers.CharField()

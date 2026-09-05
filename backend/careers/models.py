@@ -24,3 +24,18 @@ class CareerSkill(models.Model):
 
     def __str__(self):
         return f"{self.career.title} - {self.skill.name}"
+
+
+class UserSkill(models.Model):
+    user = models.ForeignKey(
+        'auth.User',
+        on_delete=models.CASCADE
+    )
+    skill = models.ForeignKey(
+        Skill,
+        on_delete=models.CASCADE
+    )
+    proficiency = models.IntegerField(default=1)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.skill.name}"
