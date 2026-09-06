@@ -2,6 +2,9 @@ from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from ai_services.skill_gap import build_skill_gap_prompt
+from ai_services.openai_service import generate_career_analysis
+
 from .models import (
     Career,
     CareerSkill,
@@ -72,9 +75,22 @@ class SkillGapView(generics.GenericAPIView):
             many=True
         )
 
+        skill_gap_data = serializer.data
+
+        # Build the AI prompt
+        prompt = build_skill_gap_prompt(
+            request.user,
+            career,
+            skill_gap_data
+        )
+
+        # Generate AI career analysis
+        ai_analysis = generate_career_analysis(prompt)
+
         return Response({
             "career": career.title,
-            "skill_gaps": serializer.data
+            "skill_gaps": skill_gap_data,
+            "ai_analysis": ai_analysis
         })
 
 
