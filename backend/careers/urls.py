@@ -4,6 +4,7 @@ from .views import (
     CareerDetailView,
     SkillGapView,
     RoadmapView,
+    RecommendationView,
 )
 
 
@@ -30,5 +31,11 @@ urlpatterns = [
         'careers/<int:career_id>/roadmap/',
         RoadmapView.as_view(),
         name='roadmap'
+    ),
+
+    path(
+        'careers/<int:career_id>/recommendations/',
+        RecommendationView.as_view(),
+        name='recommendations'
     ),
 ]

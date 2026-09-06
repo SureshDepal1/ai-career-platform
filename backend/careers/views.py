@@ -7,12 +7,14 @@ from .models import (
     CareerSkill,
     UserSkill,
     Roadmap,
+    LearningResource,
 )
 
 from .serializers import (
     CareerSerializer,
     SkillGapSerializer,
     RoadmapSerializer,
+    LearningResourceSerializer,
 )
 
 
@@ -85,3 +87,45 @@ class RoadmapView(generics.RetrieveAPIView):
         return Roadmap.objects.filter(
             career_id=career_id
         ).first()
+
+
+class RecommendationView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = LearningResourceSerializer
+
+    def get(self, request, career_id):
+        career = Career.objects.get(id=career_id)
+
+        required_skills = CareerSkill.objects.filter(
+            career=career
+        )
+
+        user_skills = {
+            user_skill.skill_id: user_skill.proficiency
+            for user_skill in UserSkill.objects.filter(
+                user=request.user
+            )
+        }
+
+        skill_ids = []
+
+        for required in required_skills:
+            current = user_skills.get(required.skill_id, 0)
+
+            if current < required.importance:
+                skill_ids.append(required.skill_id)
+
+        resources = LearningResource.objects.filter(
+            roadmap__career=career,
+            skill_id__in=skill_ids
+        )
+
+        serializer = self.get_serializer(
+            resources,
+            many=True
+        )
+
+        return Response({
+            "career": career.title,
+            "recommended_resources": serializer.data
+        })
