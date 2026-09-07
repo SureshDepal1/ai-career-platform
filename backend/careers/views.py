@@ -116,7 +116,7 @@ class RoadmapView(generics.RetrieveAPIView):
     serializer_class = RoadmapSerializer
 
     def get_object(self):
-        career_id = self.kwargs['career_id']
+        career_id = self.kwargs["career_id"]
 
         return Roadmap.objects.filter(
             career_id=career_id
@@ -144,7 +144,10 @@ class RecommendationView(generics.GenericAPIView):
         skill_ids = []
 
         for required in required_skills:
-            current = user_skills.get(required.skill_id, 0)
+            current = user_skills.get(
+                required.skill_id,
+                0
+            )
 
             if current < required.importance:
                 skill_ids.append(required.skill_id)
@@ -162,4 +165,70 @@ class RecommendationView(generics.GenericAPIView):
         return Response({
             "career": career.title,
             "recommended_resources": serializer.data
+        })
+
+
+class ReadinessScoreView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, career_id):
+        career = Career.objects.get(id=career_id)
+
+        required_skills = CareerSkill.objects.filter(
+            career=career
+        )
+
+        user_skills = {
+            user_skill.skill_id: user_skill.proficiency
+            for user_skill in UserSkill.objects.filter(
+                user=request.user
+            )
+        }
+
+        total_required = 0
+        total_current = 0
+
+        skill_scores = []
+
+        for required in required_skills:
+            current = user_skills.get(
+                required.skill_id,
+                0
+            )
+
+            total_required += required.importance
+
+            total_current += min(
+                current,
+                required.importance
+            )
+
+            percentage = round(
+                (
+                    min(
+                        current,
+                        required.importance
+                    )
+                    / required.importance
+                ) * 100
+            )
+
+            skill_scores.append({
+                "skill": required.skill.name,
+                "required": required.importance,
+                "current": current,
+                "percentage": percentage,
+            })
+
+        if total_required > 0:
+            readiness_score = round(
+                (total_current / total_required) * 100
+            )
+        else:
+            readiness_score = 0
+
+        return Response({
+            "career": career.title,
+            "readiness_score": readiness_score,
+            "skill_scores": skill_scores,
         })

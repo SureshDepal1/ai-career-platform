@@ -5,6 +5,7 @@ from .views import (
     SkillGapView,
     RoadmapView,
     RecommendationView,
+    ReadinessScoreView,
 )
 
 
@@ -37,5 +38,10 @@ urlpatterns = [
         'careers/<int:career_id>/recommendations/',
         RecommendationView.as_view(),
         name='recommendations'
+    ),
+    path(
+    'careers/<int:career_id>/readiness-score/',
+    ReadinessScoreView.as_view(),
+    name='readiness-score'
     ),
 ]
