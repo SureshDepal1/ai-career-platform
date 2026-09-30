@@ -37,3 +37,54 @@ Only return the skill list.
 """
 
     return prompt
+
+
+def build_job_learning_prompt(skill_comparison):
+    prompt = """
+You are an AI career learning advisor.
+
+A student's skills were compared with the requirements of a job.
+
+SKILL COMPARISON:
+"""
+
+    for item in skill_comparison:
+        prompt += f"""
+Skill: {item['skill']}
+Category: {item['category']}
+Required Level: {item['required']}
+Current Level: {item['current']}
+Gap: {item['gap']}
+Status: {item['status']}
+"""
+
+    prompt += """
+Based on this comparison, create a personalized learning plan.
+
+Focus mainly on skills with:
+- Missing status
+- Needs Improvement status
+
+For each skill provide:
+
+Skill:
+Priority:
+Why Learn It:
+What To Learn:
+Practice Project:
+
+Priority must be:
+High
+Medium
+Low
+
+Also provide:
+1. Which skill should be learned first.
+2. A logical learning order.
+3. When the student can start applying for jobs.
+
+Keep the advice practical and beginner-friendly.
+Do not recommend skills that already have a Good status unless they are necessary as prerequisites.
+"""
+
+    return prompt
