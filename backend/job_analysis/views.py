@@ -1,9 +1,17 @@
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.exceptions import NotFound
 
-from .models import JobDescription
-from .serializers import JobDescriptionSerializer
+from .models import (
+    JobDescription,
+    JobAnalysis,
+)
+
+from .serializers import (
+    JobDescriptionSerializer,
+    JobAnalysisSerializer,
+)
 
 from ai_services.job_analysis import (
     build_job_analysis_prompt,
@@ -16,26 +24,61 @@ from careers.models import UserSkill
 
 
 class JobDescriptionCreateView(generics.CreateAPIView):
+
     permission_classes = [IsAuthenticated]
+
     serializer_class = JobDescriptionSerializer
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        serializer.save(
+            user=self.request.user
+        )
+
+
+class JobDescriptionListView(generics.ListAPIView):
+
+    permission_classes = [IsAuthenticated]
+
+    serializer_class = JobDescriptionSerializer
+
+    def get_queryset(self):
+        return JobDescription.objects.filter(
+            user=self.request.user
+        ).order_by('-created_at')
 
 
 class JobDescriptionAnalysisView(generics.GenericAPIView):
+
     permission_classes = [IsAuthenticated]
+
+    serializer_class = JobAnalysisSerializer
 
     def get(self, request, job_id):
 
-        job = JobDescription.objects.get(
+        job = JobDescription.objects.filter(
             id=job_id,
             user=request.user
-        )
+        ).first()
 
-        # -----------------------------
-        # STEP 1: Ask Gemini to extract skills
-        # -----------------------------
+        if not job:
+            raise NotFound(
+                "Job description not found."
+            )
+
+        existing_analysis = JobAnalysis.objects.filter(
+            job=job
+        ).first()
+
+        if existing_analysis:
+
+            serializer = self.get_serializer(
+                existing_analysis
+            )
+
+            return Response({
+                "message": "Saved analysis found.",
+                "analysis": serializer.data
+            })
 
         prompt = build_job_analysis_prompt(
             job.description
@@ -44,11 +87,6 @@ class JobDescriptionAnalysisView(generics.GenericAPIView):
         ai_response = generate_career_analysis(
             prompt
         )
-
-        # -----------------------------
-        # STEP 2: Convert AI response
-        # into structured skill data
-        # -----------------------------
 
         job_skills = []
 
@@ -75,11 +113,10 @@ class JobDescriptionAnalysisView(generics.GenericAPIView):
             except ValueError:
                 continue
 
-            if importance < 1:
-                importance = 1
-
-            if importance > 5:
-                importance = 5
+            importance = max(
+                1,
+                min(importance, 5)
+            )
 
             job_skills.append({
                 "name": skill_name,
@@ -87,20 +124,12 @@ class JobDescriptionAnalysisView(generics.GenericAPIView):
                 "importance": importance,
             })
 
-        # -----------------------------
-        # STEP 3: Get user's skills
-        # -----------------------------
-
         user_skills = {
             user_skill.skill.name.lower(): user_skill.proficiency
             for user_skill in UserSkill.objects.filter(
                 user=request.user
             ).select_related("skill")
         }
-
-        # -----------------------------
-        # STEP 4: Compare skills
-        # -----------------------------
 
         comparison = []
 
@@ -119,10 +148,12 @@ class JobDescriptionAnalysisView(generics.GenericAPIView):
             )
 
             if current == 0:
+
                 status = "Missing"
                 priority = "High"
 
             elif gap > 0:
+
                 status = "Needs Improvement"
 
                 if gap >= 3:
@@ -133,6 +164,7 @@ class JobDescriptionAnalysisView(generics.GenericAPIView):
                     priority = "Low"
 
             else:
+
                 status = "Good"
                 priority = "None"
 
@@ -146,11 +178,6 @@ class JobDescriptionAnalysisView(generics.GenericAPIView):
                 "priority": priority,
             })
 
-        # -----------------------------
-        # STEP 5: Ask Gemini for
-        # personalized learning plan
-        # -----------------------------
-
         learning_prompt = build_job_learning_prompt(
             comparison
         )
@@ -159,15 +186,31 @@ class JobDescriptionAnalysisView(generics.GenericAPIView):
             learning_prompt
         )
 
-        # -----------------------------
-        # STEP 6: Return final response
-        # -----------------------------
+        analysis = JobAnalysis.objects.create(
+            job=job,
+            required_skills=job_skills,
+            skill_comparison=comparison,
+            learning_plan=learning_plan
+        )
+
+        serializer = self.get_serializer(
+            analysis
+        )
 
         return Response({
-            "job_id": job.id,
-            "job_title": job.title,
-            "company": job.company,
-            "required_skills": job_skills,
-            "skill_comparison": comparison,
-            "learning_plan": learning_plan,
+            "message": "AI job analysis created and saved.",
+            "analysis": serializer.data
         })
+
+
+class SavedJobAnalysisView(generics.RetrieveAPIView):
+
+    permission_classes = [IsAuthenticated]
+
+    serializer_class = JobAnalysisSerializer
+
+    def get_queryset(self):
+
+        return JobAnalysis.objects.filter(
+            job__user=self.request.user
+        )
