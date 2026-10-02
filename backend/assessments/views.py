@@ -28,7 +28,19 @@ class AssessmentStartView(generics.GenericAPIView):
     def post(self, request):
         career = get_object_or_404(Career, id=request.data.get('career_id'))
         skill = get_object_or_404(Skill, id=request.data.get('skill_id'))
-        question_count = min(max(int(request.data.get('question_count', 5)), 1), 10)
+        raw_question_count = request.data.get('question_count', 5)
+        try:
+            question_count = int(raw_question_count)
+        except (TypeError, ValueError):
+            return Response(
+                {'question_count': 'Enter a whole number from 1 to 10.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not 1 <= question_count <= 10:
+            return Response(
+                {'question_count': 'Enter a whole number from 1 to 10.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         questions = list(AssessmentQuestion.objects.filter(skill=skill).order_by('?')[:question_count])
         if not questions:
             return Response({'detail': 'No assessment questions are available for this skill yet.'}, status=status.HTTP_404_NOT_FOUND)
@@ -52,7 +64,22 @@ class AssessmentSubmitView(generics.GenericAPIView):
 
     def post(self, request, attempt_id):
         attempt = get_object_or_404(AssessmentAttempt, id=attempt_id, user=request.user)
-        submitted = {int(item['question_id']): int(item['selected_option']) for item in request.data.get('answers', [])}
+        answers = request.data.get('answers')
+        if not isinstance(answers, list):
+            return Response(
+                {'answers': 'Answers must be a list.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            submitted = {
+                int(item['question_id']): int(item['selected_option'])
+                for item in answers
+            }
+        except (KeyError, TypeError, ValueError):
+            return Response(
+                {'answers': 'Each answer needs a question_id and selected_option.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         questions = AssessmentQuestion.objects.filter(id__in=attempt.questions)
         correct = sum(1 for question in questions if submitted.get(question.id) == question.correct_option)
         weak = [] if correct == attempt.total_questions else [attempt.skill.name]
@@ -92,12 +119,12 @@ class InterviewStartView(generics.GenericAPIView):
         session = InterviewSession.objects.create(user=request.user, career=career, difficulty=difficulty)
         try:
             question = generate_interview_question(career, difficulty, 1)
-        except (ValueError, json.JSONDecodeError) as exc:
+        except (ValueError, json.JSONDecodeError):
             session.delete()
-            return Response({'detail': f'Unable to generate an interview question: {exc}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        except Exception as exc:
+            return Response({'detail': 'Unable to generate an interview question.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except Exception:
             session.delete()
-            return Response({'detail': f'Interview AI is unavailable: {exc}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response({'detail': 'Interview AI is temporarily unavailable.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return Response({'session_id': session.id, 'question_number': 1, 'question': question}, status=status.HTTP_201_CREATED)
 
 
@@ -112,8 +139,8 @@ class InterviewAnswerView(generics.GenericAPIView):
             return Response({'detail': 'Question and answer are required.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             evaluation = evaluate_interview_answer(session.career, session.difficulty, question, answer)
-        except Exception as exc:
-            return Response({'detail': f'Interview evaluation failed: {exc}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except Exception:
+            return Response({'detail': 'Interview evaluation is temporarily unavailable.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         number = session.turns.count() + 1
         InterviewTurn.objects.create(
             session=session,
@@ -141,8 +168,8 @@ class InterviewAnswerView(generics.GenericAPIView):
             return Response({'completed': True, 'evaluation': evaluation, 'result': InterviewSessionSerializer(session).data})
         try:
             next_question = generate_interview_question(session.career, session.difficulty, number + 1)
-        except Exception as exc:
-            return Response({'detail': f'Unable to generate the next interview question: {exc}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except Exception:
+            return Response({'detail': 'Unable to generate the next interview question.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return Response({'completed': False, 'evaluation': evaluation, 'question_number': number + 1, 'question': next_question})
 
 

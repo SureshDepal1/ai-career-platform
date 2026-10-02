@@ -1,11 +1,9 @@
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
 
-from ai_services.skill_gap import (
-    build_skill_gap_prompt,
-    build_learning_roadmap_prompt,
-)
+from ai_services.skill_gap import build_skill_gap_prompt
 from ai_services.openai_service import generate_career_analysis
 
 from .models import (
@@ -21,6 +19,7 @@ from .serializers import (
     SkillGapSerializer,
     RoadmapSerializer,
     LearningResourceSerializer,
+    UserSkillSerializer,
 )
 
 
@@ -39,11 +38,11 @@ class SkillGapView(generics.GenericAPIView):
     serializer_class = SkillGapSerializer
 
     def get(self, request, career_id):
-        career = Career.objects.get(id=career_id)
+        career = get_object_or_404(Career, id=career_id)
 
         required_skills = CareerSkill.objects.filter(
             career=career
-        )
+        ).select_related('skill')
 
         user_skills = {
             user_skill.skill_id: user_skill.proficiency
@@ -80,36 +79,79 @@ class SkillGapView(generics.GenericAPIView):
 
         skill_gap_data = serializer.data
 
-        # Build AI skill-gap analysis prompt
-        skill_gap_prompt = build_skill_gap_prompt(
-            request.user,
-            career,
-            skill_gap_data
-        )
-
-        # Build AI personalized learning roadmap prompt
-        roadmap_prompt = build_learning_roadmap_prompt(
-            request.user,
-            career,
-            skill_gap_data
-        )
-
-        # Generate AI career analysis
-        ai_analysis = generate_career_analysis(
-            skill_gap_prompt
-        )
-
-        # Generate AI personalized learning roadmap
-        learning_roadmap = generate_career_analysis(
-            roadmap_prompt
-        )
-
         return Response({
             "career": career.title,
             "skill_gaps": skill_gap_data,
-            "ai_analysis": ai_analysis,
-            "learning_roadmap": learning_roadmap,
         })
+
+
+class CareerAIAnalysisView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, career_id):
+        career = get_object_or_404(Career, id=career_id)
+        required_skills = CareerSkill.objects.filter(
+            career=career
+        ).select_related('skill')
+        user_skills = {
+            item.skill_id: item.proficiency
+            for item in UserSkill.objects.filter(user=request.user)
+        }
+        skill_gaps = []
+        for required in required_skills:
+            current = user_skills.get(required.skill_id, 0)
+            gap = max(required.importance - current, 0)
+            skill_gaps.append({
+                'skill': {
+                    'name': required.skill.name,
+                    'category': required.skill.category,
+                },
+                'required_importance': required.importance,
+                'current_proficiency': current,
+                'gap': gap,
+                'status': (
+                    'Missing' if current == 0 else
+                    'Needs Improvement' if gap else 'Good'
+                ),
+            })
+        try:
+            analysis = generate_career_analysis(
+                build_skill_gap_prompt(request.user, career, skill_gaps)
+            )
+        except Exception:
+            return Response(
+                {'detail': 'AI career advice is temporarily unavailable.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        if not analysis:
+            return Response(
+                {'detail': 'AI career advice returned no usable content.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({'career': career.title, 'ai_analysis': analysis})
+
+
+class UserSkillListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserSkillSerializer
+
+    def get_queryset(self):
+        return UserSkill.objects.filter(
+            user=self.request.user
+        ).select_related('skill')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class UserSkillDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserSkillSerializer
+
+    def get_queryset(self):
+        return UserSkill.objects.filter(
+            user=self.request.user
+        ).select_related('skill')
 
 
 class RoadmapView(generics.RetrieveAPIView):
@@ -128,11 +170,11 @@ class RecommendationView(generics.GenericAPIView):
     serializer_class = LearningResourceSerializer
 
     def get(self, request, career_id):
-        career = Career.objects.get(id=career_id)
+        career = get_object_or_404(Career, id=career_id)
 
         required_skills = CareerSkill.objects.filter(
             career=career
-        )
+        ).select_related('skill')
 
         user_skills = {
             user_skill.skill_id: user_skill.proficiency
@@ -172,11 +214,11 @@ class ReadinessScoreView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, career_id):
-        career = Career.objects.get(id=career_id)
+        career = get_object_or_404(Career, id=career_id)
 
         required_skills = CareerSkill.objects.filter(
             career=career
-        )
+        ).select_related('skill')
 
         user_skills = {
             user_skill.skill_id: user_skill.proficiency

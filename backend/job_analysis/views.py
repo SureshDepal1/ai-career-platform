@@ -2,6 +2,7 @@ from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound
+from rest_framework import status
 
 from .models import (
     JobDescription,
@@ -16,9 +17,11 @@ from .serializers import (
 from ai_services.job_analysis import (
     build_job_analysis_prompt,
     build_job_learning_prompt,
+    normalize_skill_name,
+    parse_job_skills,
 )
 
-from ai_services.openai_service import generate_career_analysis
+from ai_services.openai_service import generate_career_analysis, AIServiceError
 
 from careers.models import UserSkill
 
@@ -84,48 +87,23 @@ class JobDescriptionAnalysisView(generics.GenericAPIView):
             job.description
         )
 
-        ai_response = generate_career_analysis(
-            prompt
-        )
-
-        job_skills = []
-
-        for line in ai_response.splitlines():
-
-            line = line.strip()
-
-            if not line or "|" not in line:
-                continue
-
-            parts = [
-                part.strip()
-                for part in line.split("|")
-            ]
-
-            if len(parts) != 3:
-                continue
-
-            skill_name = parts[0]
-            category = parts[1]
-
-            try:
-                importance = int(parts[2])
-            except ValueError:
-                continue
-
-            importance = max(
-                1,
-                min(importance, 5)
+        try:
+            ai_response = generate_career_analysis(prompt)
+        except AIServiceError:
+            return Response(
+                {'detail': 'Job analysis is temporarily unavailable.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-            job_skills.append({
-                "name": skill_name,
-                "category": category,
-                "importance": importance,
-            })
+        job_skills = parse_job_skills(ai_response)
+        if not job_skills:
+            return Response(
+                {'detail': 'The job description did not produce valid skills.'},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
 
         user_skills = {
-            user_skill.skill.name.lower(): user_skill.proficiency
+            normalize_skill_name(user_skill.skill.name): user_skill.proficiency
             for user_skill in UserSkill.objects.filter(
                 user=request.user
             ).select_related("skill")
@@ -136,7 +114,7 @@ class JobDescriptionAnalysisView(generics.GenericAPIView):
         for item in job_skills:
 
             current = user_skills.get(
-                item["name"].lower(),
+                normalize_skill_name(item["name"]),
                 0
             )
 
@@ -182,9 +160,13 @@ class JobDescriptionAnalysisView(generics.GenericAPIView):
             comparison
         )
 
-        learning_plan = generate_career_analysis(
-            learning_prompt
-        )
+        try:
+            learning_plan = generate_career_analysis(learning_prompt)
+        except AIServiceError:
+            return Response(
+                {'detail': 'The skill comparison was created, but the learning plan is unavailable.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
         analysis = JobAnalysis.objects.create(
             job=job,

@@ -5,6 +5,7 @@ from .models import (
     CareerSkill,
     Roadmap,
     LearningResource,
+    UserSkill,
 )
 
 
@@ -12,6 +13,39 @@ class SkillSerializer(serializers.ModelSerializer):
     class Meta:
         model = Skill
         fields = ['id', 'name', 'category']
+
+
+class UserSkillSerializer(serializers.ModelSerializer):
+    skill = SkillSerializer(read_only=True)
+    skill_id = serializers.PrimaryKeyRelatedField(
+        source='skill',
+        queryset=Skill.objects.all(),
+        write_only=True,
+    )
+
+    class Meta:
+        model = UserSkill
+        fields = ['id', 'skill', 'skill_id', 'proficiency']
+        read_only_fields = ['id', 'skill']
+
+    def validate_proficiency(self, value):
+        if not 1 <= value <= 5:
+            raise serializers.ValidationError(
+                'Proficiency must be between 1 and 5.'
+            )
+        return value
+
+    def validate(self, attrs):
+        user = self.context['request'].user
+        skill = attrs.get('skill', getattr(self.instance, 'skill', None))
+        if skill and UserSkill.objects.filter(
+            user=user,
+            skill=skill,
+        ).exclude(pk=getattr(self.instance, 'pk', None)).exists():
+            raise serializers.ValidationError(
+                {'skill_id': 'You already have this skill.'}
+            )
+        return attrs
 
 
 class CareerSkillSerializer(serializers.ModelSerializer):
@@ -30,7 +64,7 @@ class CareerSerializer(serializers.ModelSerializer):
         fields = ['id', 'title', 'description', 'required_skills']
 
     def get_required_skills(self, obj):
-        career_skills = CareerSkill.objects.filter(career=obj)
+        career_skills = CareerSkill.objects.filter(career=obj).select_related('skill')
 
         return CareerSkillSerializer(
             career_skills,

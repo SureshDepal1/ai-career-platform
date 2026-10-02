@@ -6,6 +6,9 @@ from .views import (
     RoadmapView,
     RecommendationView,
     ReadinessScoreView,
+    CareerAIAnalysisView,
+    UserSkillListCreateView,
+    UserSkillDetailView,
 )
 
 
@@ -44,4 +47,11 @@ urlpatterns = [
     ReadinessScoreView.as_view(),
     name='readiness-score'
     ),
+    path(
+        'careers/<int:career_id>/ai-analysis/',
+        CareerAIAnalysisView.as_view(),
+        name='career-ai-analysis',
+    ),
+    path('skills/', UserSkillListCreateView.as_view(), name='user-skill-list'),
+    path('skills/<int:pk>/', UserSkillDetailView.as_view(), name='user-skill-detail'),
 ]

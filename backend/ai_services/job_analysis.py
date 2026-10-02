@@ -88,3 +88,37 @@ Do not recommend skills that already have a Good status unless they are necessar
 """
 
     return prompt
+
+
+def normalize_skill_name(name):
+    return ' '.join(name.casefold().strip().split())
+
+
+def parse_job_skills(text):
+    """Parse Gemini's pipe format while tolerating common formatting noise."""
+    skills = []
+    seen = set()
+    for raw_line in (text or '').splitlines():
+        line = raw_line.strip().strip('`*_- ')
+        if not line or '|' not in line:
+            continue
+        parts = [part.strip().strip('`*') for part in line.split('|')]
+        if len(parts) != 3:
+            continue
+        name, category, raw_importance = parts
+        if not name or not category:
+            continue
+        try:
+            importance = int(raw_importance)
+        except (TypeError, ValueError):
+            continue
+        key = normalize_skill_name(name)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        skills.append({
+            'name': name,
+            'category': category,
+            'importance': max(1, min(importance, 5)),
+        })
+    return skills

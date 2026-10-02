@@ -10,7 +10,7 @@ analysis, assessments, and AI-assisted mock interviews.
 - Frontend: React 18, React Router, Vite
 - Backend: Django 6.1, Django REST Framework, Simple JWT
 - Database: SQLite for local development
-- AI integrations: Gemini/OpenAI environment variables
+- AI integration: Google Gemini through the backend only
 
 ## Local setup
 
@@ -25,15 +25,13 @@ cd backend
 .\venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000
 ```
 
-Create `backend/.env` for any AI provider credentials used by the enabled
-services:
+Copy `backend/.env.example` to `backend/.env` and set local values:
 
 ```text
 DJANGO_SECRET_KEY=replace-with-a-long-random-value
 DJANGO_DEBUG=True
 DJANGO_ALLOWED_HOSTS=127.0.0.1,localhost
 GEMINI_API_KEY=your-key
-OPENAI_API_KEY=your-key
 ```
 
 For production, set `DJANGO_DEBUG=False`, provide a unique secret
@@ -72,6 +70,17 @@ The authenticated workspace includes:
 The API is available under `/api/`. Registration uses `/api/register/`, while
 JWT authentication uses `/api/token/` and `/api/token/refresh/`.
 
+Structured skills are managed through `/api/skills/` and are the source of
+truth for skill gaps, readiness, recommendations, and job comparisons.
+`current_skills` remains an optional free-form profile field for compatibility.
+The normal `/api/careers/<id>/skill-gap/` endpoint performs only database
+calculation. Gemini is called only after an authenticated user explicitly
+requests `/api/careers/<id>/ai-analysis/`.
+
+The readiness score is the percentage of required skill proficiency covered by
+the user's recorded skills for a career. It is a progress indicator, not a
+prediction of employment or hiring probability.
+
 ## Validation
 
 Run the backend checks:
@@ -89,6 +98,6 @@ cd frontend
 npm run build
 ```
 
-The existing Django test modules are currently placeholders, so the test
-command verifies discovery and Django configuration but does not execute
-feature-level test cases.
+The backend test suite includes authentication, ownership, structured skills,
+skill gaps, job analysis persistence, assessment validation, and privacy tests.
+AI calls are mocked in tests, so they do not consume Gemini quota.

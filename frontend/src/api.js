@@ -34,13 +34,17 @@ export async function apiFetch(path, options = {}, retry = true) {
   if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (tokenStore.access) headers.set("Authorization", `Bearer ${tokenStore.access}`);
   const response = await fetch(`${API_ROOT}${path}`, { ...options, headers });
-  if (response.status === 401 && retry && await refreshAccessToken()) {
-    return apiFetch(path, options, false);
+  if (response.status === 401 && retry) {
+    const hadRefreshToken = Boolean(tokenStore.refresh);
+    if (await refreshAccessToken()) return apiFetch(path, options, false);
+    if (hadRefreshToken) window.location.assign("/login");
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = payload.detail || Object.values(payload).flat().join(" ") || "Something went wrong.";
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
   return payload;
 }
