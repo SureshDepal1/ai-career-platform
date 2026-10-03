@@ -61,10 +61,10 @@ class CareerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Career
-        fields = ['id', 'title', 'description', 'required_skills']
+        fields = ['id', 'title', 'category', 'description', 'required_skills']
 
     def get_required_skills(self, obj):
-        career_skills = CareerSkill.objects.filter(career=obj).select_related('skill')
+        career_skills = obj.careerskill_set.all()
 
         return CareerSkillSerializer(
             career_skills,

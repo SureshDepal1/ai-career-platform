@@ -4,6 +4,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 
 class Career(models.Model):
     title = models.CharField(max_length=200)
+    category = models.CharField(max_length=100, default='Other')
     description = models.TextField(blank=True)
 
     def __str__(self):

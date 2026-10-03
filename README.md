@@ -77,6 +77,16 @@ The normal `/api/careers/<id>/skill-gap/` endpoint performs only database
 calculation. Gemini is called only after an authenticated user explicitly
 requests `/api/careers/<id>/ai-analysis/`.
 
+Seed the reusable career catalog from the backend directory with:
+
+```powershell
+python manage.py seed_careers
+```
+
+The command is repeatable, preserves existing records, reuses skills
+case-insensitively, and updates career-skill relationships without deleting
+user or analysis data.
+
 The readiness score is the percentage of required skill proficiency covered by
 the user's recorded skills for a career. It is a progress indicator, not a
 prediction of employment or hiring probability.

@@ -24,12 +24,16 @@ from .serializers import (
 
 
 class CareerListView(generics.ListAPIView):
-    queryset = Career.objects.all()
+    queryset = Career.objects.all().prefetch_related(
+        'careerskill_set__skill'
+    )
     serializer_class = CareerSerializer
 
 
 class CareerDetailView(generics.RetrieveAPIView):
-    queryset = Career.objects.all()
+    queryset = Career.objects.all().prefetch_related(
+        'careerskill_set__skill'
+    )
     serializer_class = CareerSerializer
 
 
