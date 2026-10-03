@@ -159,14 +159,44 @@ class UserSkillDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class RoadmapView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
     serializer_class = RoadmapSerializer
 
     def get_object(self):
-        career_id = self.kwargs["career_id"]
+        return get_object_or_404(
+            Roadmap.objects.prefetch_related('resources__skill'),
+            career_id=self.kwargs["career_id"],
+        )
 
-        return Roadmap.objects.filter(
-            career_id=career_id
-        ).first()
+    def retrieve(self, request, *args, **kwargs):
+        roadmap = self.get_object()
+        user_skills = {
+            item.skill_id: item.proficiency
+            for item in UserSkill.objects.filter(user=request.user)
+        }
+        resources = []
+        for resource in roadmap.resources.all().order_by('phase', 'id'):
+            required = CareerSkill.objects.filter(
+                career=roadmap.career,
+                skill=resource.skill,
+            ).values_list('importance', flat=True).first() or 1
+            current = user_skills.get(resource.skill_id, 0)
+            status = (
+                'Completed' if current >= required else
+                'In Progress' if current > 0 else
+                'Not Started'
+            )
+            item = LearningResourceSerializer(resource).data
+            item.update({
+                'priority': required,
+                'status': status,
+                'current_proficiency': current,
+                'required_proficiency': required,
+            })
+            resources.append(item)
+        data = RoadmapSerializer(roadmap).data
+        data['resources'] = resources
+        return Response(data)
 
 
 class RecommendationView(generics.GenericAPIView):

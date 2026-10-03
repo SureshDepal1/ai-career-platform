@@ -92,6 +92,10 @@ class LearningResourceSerializer(serializers.ModelSerializer):
             'description',
             'resource_type',
             'url',
+            'learning_objectives',
+            'practice_project',
+            'expected_outcome',
+            'phase',
         ]
 
 

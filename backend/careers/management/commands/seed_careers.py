@@ -1,7 +1,13 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from careers.models import Career, CareerSkill, Skill
+from careers.models import (
+    Career,
+    CareerSkill,
+    LearningResource,
+    Roadmap,
+    Skill,
+)
 
 
 CATEGORIES = {
@@ -189,6 +195,33 @@ TITLE_SKILLS = {
                         ('Data Analysis', 'Analytics', 3)],
 }
 
+RESOURCE_CATALOG = {
+    'Python': ('Python Documentation', 'Learn the Python language and standard library.', 'Documentation', 'https://docs.python.org/3/', 'Build a small command-line tool.', 'Write readable Python programs.'),
+    'Django': ('Django Documentation', 'Learn how to build secure web applications with Django.', 'Documentation', 'https://docs.djangoproject.com/en/stable/', 'Build a CRUD web application.', 'Create maintainable Django applications.'),
+    'REST APIs': ('Django REST framework Tutorial', 'Learn how to build browsable, production-ready REST APIs.', 'Tutorial', 'https://www.django-rest-framework.org/tutorial/quickstart/', 'Build an authenticated JSON API.', 'Design and test REST endpoints.'),
+    'Docker': ('Docker Get Started', 'Learn containerization and essential Docker workflows.', 'Documentation', 'https://docs.docker.com/get-started/', 'Containerize a web application.', 'Package and run services consistently.'),
+    'Git': ('Git Documentation', 'Learn version control workflows for collaborative development.', 'Documentation', 'https://git-scm.com/doc', 'Publish a project with a clean commit history.', 'Collaborate safely with Git.'),
+    'SQL': ('PostgreSQL Documentation', 'Practice relational queries and database fundamentals.', 'Documentation', 'https://www.postgresql.org/docs/', 'Design and query a relational database.', 'Write reliable SQL queries.'),
+    'Database Design': ('PostgreSQL Documentation', 'Learn relational modeling, constraints, and query planning.', 'Documentation', 'https://www.postgresql.org/docs/', 'Model a database for a real application.', 'Design normalized relational schemas.'),
+    'Authentication and JWT': ('Django REST framework Authentication', 'Learn authentication and permission patterns for APIs.', 'Documentation', 'https://www.django-rest-framework.org/api-guide/authentication/', 'Add JWT authentication to an API.', 'Secure API access with clear permissions.'),
+    'JavaScript': ('MDN JavaScript Guide', 'Learn the core language and browser APIs.', 'Guide', 'https://developer.mozilla.org/en-US/docs/Web/JavaScript', 'Build an interactive browser application.', 'Write robust modern JavaScript.'),
+    'React': ('React Learn', 'Learn React fundamentals by building user interfaces.', 'Tutorial', 'https://react.dev/learn', 'Build a dashboard with reusable components.', 'Compose responsive React interfaces.'),
+    'Statistics': ('OpenStax Introductory Statistics', 'Build a practical foundation in descriptive and inferential statistics.', 'Course', 'https://openstax.org/details/books/introductory-statistics-2e', 'Analyze a real-world dataset.', 'Interpret uncertainty and statistical results.'),
+    'NumPy': ('NumPy User Guide', 'Learn numerical arrays and scientific computing workflows.', 'Documentation', 'https://numpy.org/doc/', 'Implement a numerical data transformation.', 'Work efficiently with numerical data.'),
+    'Pandas': ('pandas Documentation', 'Learn data loading, cleaning, and analysis with pandas.', 'Documentation', 'https://pandas.pydata.org/docs/', 'Clean and analyze a public dataset.', 'Prepare reproducible tabular analyses.'),
+    'Machine Learning': ('scikit-learn User Guide', 'Learn core machine-learning workflows and model evaluation.', 'Guide', 'https://scikit-learn.org/stable/user_guide.html', 'Train and evaluate a supervised model.', 'Build an evaluated ML pipeline.'),
+    'Deep Learning': ('PyTorch Tutorials', 'Learn the fundamentals of deep learning with PyTorch.', 'Tutorial', 'https://pytorch.org/tutorials/', 'Train a small image classifier.', 'Build and evaluate neural networks.'),
+    'Data Visualization': ('Matplotlib Documentation', 'Learn to communicate data with clear visualizations.', 'Documentation', 'https://matplotlib.org/stable/contents.html', 'Create a data story with charts.', 'Choose and explain effective visualizations.'),
+    'Data Cleaning': ('pandas User Guide', 'Practice handling missing, inconsistent, and duplicated data.', 'Guide', 'https://pandas.pydata.org/docs/user_guide/index.html', 'Create a reusable cleaning notebook.', 'Produce analysis-ready datasets.'),
+    'Power BI and Tableau': ('Microsoft Power BI Learning', 'Learn dashboarding and business intelligence fundamentals.', 'Course', 'https://learn.microsoft.com/en-us/training/powerplatform/power-bi/', 'Build an interactive KPI dashboard.', 'Deliver a clear stakeholder dashboard.'),
+    'Networking': ('Cisco Networking Basics', 'Build practical foundations in networking concepts and protocols.', 'Course', 'https://www.cisco.com/c/en/us/training-events/training-certifications/training/training-services/courses/networking-basics.html', 'Document and troubleshoot a small network.', 'Explain common network behavior.'),
+    'Linux': ('Linux Documentation', 'Learn essential Linux administration and command-line skills.', 'Documentation', 'https://www.kernel.org/doc/html/latest/', 'Automate a routine server task.', 'Navigate and manage Linux systems.'),
+    'SIEM': ('Microsoft Sentinel Documentation', 'Learn the principles of security information and event management.', 'Documentation', 'https://learn.microsoft.com/en-us/azure/sentinel/', 'Create detections from sample logs.', 'Investigate security events systematically.'),
+    'Threat Detection': ('MITRE ATT&CK', 'Learn a shared knowledge base for adversary tactics and techniques.', 'Reference', 'https://attack.mitre.org/', 'Map a detection plan to ATT&CK techniques.', 'Recognize and explain common threats.'),
+    'Incident Response': ('NIST Incident Response Guide', 'Learn a repeatable process for preparing for and handling incidents.', 'Guide', 'https://csrc.nist.gov/pubs/sp/800/61/r2/final', 'Write an incident response playbook.', 'Respond consistently to security incidents.'),
+    'Security Tools': ('OWASP Web Security Testing Guide', 'Learn established approaches to testing application security.', 'Guide', 'https://owasp.org/www-project-web-security-testing-guide/', 'Perform a safe test against a local app.', 'Use security tools responsibly.'),
+}
+
 
 def canonical(value):
     return ' '.join(value.casefold().strip().split())
@@ -206,6 +239,8 @@ class Command(BaseCommand):
         created_careers = 0
         created_skills = 0
         created_links = 0
+        created_roadmaps = 0
+        created_resources = 0
 
         for category, titles in CATEGORIES.items():
             base_skills = CATEGORY_SKILLS[category]
@@ -247,8 +282,39 @@ class Command(BaseCommand):
                     )
                     created_links += int(created)
 
+                roadmap, roadmap_created = Roadmap.objects.get_or_create(
+                    career=career,
+                    defaults={
+                        'title': f'{title} Learning Roadmap',
+                        'description': f'A practical learning path for {title}, ordered by the skills required for this career.',
+                    },
+                )
+                created_roadmaps += int(roadmap_created)
+                for phase, (name, skill_category, importance) in enumerate(skills, start=1):
+                    skill = existing_skills[canonical(name)]
+                    catalog = RESOURCE_CATALOG.get(name)
+                    if not catalog:
+                        continue
+                    resource_title, description, resource_type, url, project, outcome = catalog
+                    _, resource_created = LearningResource.objects.update_or_create(
+                        roadmap=roadmap,
+                        skill=skill,
+                        defaults={
+                            'title': resource_title,
+                            'description': description,
+                            'resource_type': resource_type,
+                            'url': url,
+                            'learning_objectives': description,
+                            'practice_project': project,
+                            'expected_outcome': outcome,
+                            'phase': phase,
+                        },
+                    )
+                    created_resources += int(resource_created)
+
         self.stdout.write(self.style.SUCCESS(
             f'Catalog ready: {Career.objects.count()} careers, '
             f'{Skill.objects.count()} skills, {created_links} relationships '
-            f'({created_careers} careers and {created_skills} skills created).'
+            f'({created_careers} careers and {created_skills} skills created, '
+            f'{created_roadmaps} roadmaps and {created_resources} resources created).'
         ))

@@ -80,6 +80,10 @@ class LearningResource(models.Model):
     description = models.TextField(blank=True)
     resource_type = models.CharField(max_length=50, blank=True)
     url = models.URLField(blank=True)
+    learning_objectives = models.TextField(blank=True)
+    practice_project = models.CharField(max_length=255, blank=True)
+    expected_outcome = models.CharField(max_length=255, blank=True)
+    phase = models.PositiveIntegerField(default=1)
 
     def __str__(self):
         return self.title

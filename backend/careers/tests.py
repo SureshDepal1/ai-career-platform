@@ -3,7 +3,14 @@ from unittest.mock import patch
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import Career, CareerSkill, Skill, UserSkill
+from .models import (
+    Career,
+    CareerSkill,
+    LearningResource,
+    Roadmap,
+    Skill,
+    UserSkill,
+)
 
 
 class CareerApiTests(APITestCase):
@@ -56,6 +63,64 @@ class CareerApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['readiness_score'], 29)
+
+    def test_recommendations_are_scoped_to_career_gaps(self):
+        roadmap = Roadmap.objects.create(
+            career=self.career,
+            title='Backend roadmap',
+        )
+        LearningResource.objects.create(
+            roadmap=roadmap,
+            skill=self.python,
+            title='Python',
+            url='https://docs.python.org/3/',
+        )
+        LearningResource.objects.create(
+            roadmap=roadmap,
+            skill=self.sql,
+            title='SQL',
+            url='https://www.postgresql.org/docs/',
+        )
+        UserSkill.objects.create(
+            user=self.user,
+            skill=self.python,
+            proficiency=4,
+        )
+
+        response = self.client.get(
+            f'/api/careers/{self.career.id}/recommendations/'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [item['skill']['name'] for item in response.data['recommended_resources']],
+            ['SQL'],
+        )
+
+    def test_roadmap_is_career_scoped_and_personalized(self):
+        roadmap = Roadmap.objects.create(
+            career=self.career,
+            title='Backend roadmap',
+        )
+        LearningResource.objects.create(
+            roadmap=roadmap,
+            skill=self.python,
+            title='Python',
+            url='https://docs.python.org/3/',
+            phase=1,
+        )
+        UserSkill.objects.create(
+            user=self.user,
+            skill=self.python,
+            proficiency=4,
+        )
+
+        response = self.client.get(f'/api/careers/{self.career.id}/roadmap/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['career'], self.career.id)
+        self.assertEqual(response.data['resources'][0]['status'], 'Completed')
+        self.assertEqual(response.data['resources'][0]['phase'], 1)
 
     @patch('careers.views.generate_career_analysis', return_value='Practice Python projects first.')
     def test_ai_analysis_requires_explicit_action(self, generate):
